@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cribbage Counters</title>
+  <meta name="theme-color" content="#f0f0f0" />
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .block {
+      background: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .counter {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 1rem 0;
+      position: relative;
+    }
+
+    .counter button {
+      font-size: 1rem;
+      padding: 0.5rem 0.75rem;
+      margin: 0 0.2rem;
+      border: none;
+      border-radius: 0.4rem;
+      background-color: #ddd;
+    }
+
+    .value {
+      font-size: 2rem;
+      font-weight: bold;
+      min-width: 3rem;
+      text-align: center;
+      margin: 0 0.5rem;
+    }
+
+    .red .value { color: red; }
+    .blue .value { color: blue; }
+    .green .value { color: green; }
+
+    .temp-display {
+      position: absolute;
+      top: -1.2rem;
+      font-size: 0.9rem;
+      opacity: 0.8;
+      transition: opacity 0.5s ease-out;
+      pointer-events: none;
+    }
+
+    .temp-positive { color: green; }
+    .temp-negative { color: red; }
+
+    .cribbage-rules h2 {
+      margin-top: 0;
+      text-align: center;
+      font-size: 1.2rem;
+    }
+
+    .cribbage-rules ul {
+      list-style-type: disc;
+      padding-left: 1.2rem;
+      margin: 0;
+    }
+
+    .cribbage-rules li {
+      margin: 0.4rem 0;
+      font-size: 1rem;
+    }
+
+    .cribbage-rules strong {
+      font-weight: bold;
+    }
+
+    .restart {
+      margin-top: 1rem;
+      padding: 0.75rem 1.5rem;
+      background-color: #ff4d4d;
+      color: white;
+      border: none;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .board {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+.cribbage-track {
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  gap: 4px;
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box;
+}
+
+.cribbage-hole {
+  width: 8px;
+  height: 8px;
+  background-color: #ccc;
+  border-radius: 50%;
+  margin: auto;
+}
+
+  </style>
+</head>
+<body>
+  <div class="block">
+    <h2 style="text-align:center;">Cribbage</h2>
+  </div>
+  <div class="block">
+
+    <div class="counter red">
+      <button onclick="change('red', -5)">−5</button>
+      <button onclick="change('red', -1)">−1</button>
+      <div class="value" id="red">0</div>
+      <button onclick="change('red', 1)">+1</button>
+      <button onclick="change('red', 5)">+5</button>
+      <div class="temp-display" id="red-temp"></div>
+    </div>
+
+    <div class="counter blue">
+      <button onclick="change('blue', -5)">−5</button>
+      <button onclick="change('blue', -1)">−1</button>
+      <div class="value" id="blue">0</div>
+      <button onclick="change('blue', 1)">+1</button>
+      <button onclick="change('blue', 5)">+5</button>
+      <div class="temp-display" id="blue-temp"></div>
+    </div>
+
+    <div class="counter green">
+      <button onclick="change('green', -5)">−5</button>
+      <button onclick="change('green', -1)">−1</button>
+      <div class="value" id="green">0</div>
+      <button onclick="change('green', 1)">+1</button>
+      <button onclick="change('green', 5)">+5</button>
+      <div class="temp-display" id="green-temp"></div>
+    </div>
+  </div>
+
+  <div class="block board">
+    <div class="cribbage-track" id="cribbage-track"></div>
+  </div>
+
+  <div class="block cribbage-rules">
+    <h2>Scoring</h2>
+    <ul>
+      <li><strong>During play:</strong>
+        <ul>
+          <li>15 exactly: <strong>2 pts</strong></li>
+          <li>31 exactly: <strong>2 pts</strong></li>
+          <li>Go (no one can play without going over 31): <strong>1 pt</strong></li>
+          <li>Pair: <strong>2 pts</strong> (can go up two four of a kind)</li>
+          <li>Run of 3+: <strong>1 pt per card</strong></li>
+        </ul>
+      </li>
+      <li><strong>In hand / crib:</strong>
+        <ul>
+          <li>15s: <strong>2 pts</strong> each</li>
+          <li>Pairs: <strong>2 pts</strong> each</li>
+          <li>Runs of 3 or more: <strong>1 pt per card</strong></li>
+          <li>Flush (4+ cards, entire hand): <strong>1 pt per card</strong></li>
+          <li>Nobs (Jack same suit as starter): <strong>1 pt</strong></li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <div class="block cribbage-rules">
+    <h2>Rules</h2>
+    <ul>
+      <li>Each player is dealt <strong>6 cards</strong> (5 cards in 3-player games)</li>
+      <li><strong>Discard 2 cards</strong> to the crib (1 each in 3-player games)</li>
+      <li>Cut deck to reveal starter card</li>
+      <li>Players alternate <strong>playing cards</strong> to 31</li>
+      <li>Players play hands (& crib if dealer)</li>
+      <li>First to <strong>121 points</strong> wins</li>
+    </ul>
+  </div>
+
+  <button class="restart" onclick="restartAll()">Reset</button>
+
+  <script>
+    const tempValues = { red: 0, blue: 0, green: 0 };
+    const timers = { red: null, blue: null, green: null };
+
+    function loadState() {
+      ['red', 'blue', 'green'].forEach(id => {
+        const val = parseInt(localStorage.getItem(id)) || 0;
+        document.getElementById(id).textContent = val;
+      });
+    }
+
+    function saveState(id, value) {
+      localStorage.setItem(id, value);
+    }
+
+    function change(id, delta) {
+      const el = document.getElementById(id);
+      let val = parseInt(el.textContent, 10);
+      val = Math.max(0, val + delta);
+      el.textContent = val;
+      saveState(id, val);
+      updateTempDisplay(id, delta);
+      renderBoard();
+    }
+
+    function updateTempDisplay(id, delta) {
+      const tempEl = document.getElementById(`${id}-temp`);
+      tempValues[id] += delta;
+      const showValue = tempValues[id];
+      tempEl.textContent = (showValue > 0 ? "+" : "") + showValue;
+      tempEl.className = `temp-display ${showValue >= 0 ? 'temp-positive' : 'temp-negative'}`;
+      tempEl.style.opacity = "1";
+      if (timers[id]) clearTimeout(timers[id]);
+      timers[id] = setTimeout(() => {
+        tempEl.style.opacity = "0";
+        tempValues[id] = 0;
+      }, 10000);
+    }
+
+    function restartAll() {
+      ['red', 'blue', 'green'].forEach(id => {
+        document.getElementById(id).textContent = "0";
+        localStorage.setItem(id, "0");
+        document.getElementById(`${id}-temp`).style.opacity = "0";
+        tempValues[id] = 0;
+      });
+      renderBoard();
+    }
+
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        const CACHE_NAME = 'cribbage-counter-v1';
+        const urlsToCache = ['.'];
+        self.addEventListener('install', e => {
+          e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(urlsToCache)));
+        });
+        self.addEventListener('fetch', e => {
+          e.respondWith(
+            caches.match(e.request).then(r => r || fetch(e.request))
+          );
+        });
+      `;
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swURL = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swURL);
+    }
+
+    function renderBoard() {
+      const track = document.getElementById("cribbage-track");
+      track.innerHTML = "";
+      const positions = {
+        red: parseInt(localStorage.getItem("red")) || 0,
+        blue: parseInt(localStorage.getItem("blue")) || 0,
+        green: parseInt(localStorage.getItem("green")) || 0
+      };
+
+      for (let i = 0; i <= 120; i++) {
+        const hole = document.createElement("div");
+        hole.className = "cribbage-hole";
+
+        const occupying = Object.entries(positions)
+          .filter(([_, pos]) => pos === i)
+          .map(([color]) => color);
+
+        if (occupying.length === 1) {
+          hole.style.backgroundColor = occupying[0];
+        } else if (occupying.length > 1) {
+          hole.style.backgroundColor = "black";
+        }
+
+        track.appendChild(hole);
+      }
+    }
+
+    loadState();
+    renderBoard();
+  </script>
+</body>
+</html>
