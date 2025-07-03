@@ -106,34 +106,32 @@
       align-items: center;
     }
 
-.cribbage-track {
-  display: grid;
-  grid-template-columns: repeat(30, 1fr);
-  gap: 4px;
-  width: 100%;
-  max-width: 400px;
-  box-sizing: border-box;
-}
+    .cribbage-track {
+      display: grid;
+      grid-template-columns: repeat(30, 1fr);
+      gap: 4px;
+      width: 100%;
+      max-width: 400px;
+      box-sizing: border-box;
+    }
 
-.cribbage-hole {
-  width: 8px;
-  height: 8px;
-  background-color: #ccc;
-  border-radius: 50%;
-  margin: auto;
-}
-
+    .cribbage-hole {
+      width: 8px;
+      height: 8px;
+      background-color: #ccc;
+      border-radius: 50%;
+      margin: auto;
+    }
   </style>
 </head>
 <body>
   <div class="block">
     <h2 style="text-align:center;">Cribbage</h2>
   </div>
-  <div class="block">
 
+  <div class="block">
     <div class="counter red">
-      <button onclick="change('red', -5)">−5</button>
-      <button onclick="change('red', -1)">−1</button>
+      <button onclick="undo('red')">Undo</button>
       <div class="value" id="red">0</div>
       <button onclick="change('red', 1)">+1</button>
       <button onclick="change('red', 5)">+5</button>
@@ -141,8 +139,7 @@
     </div>
 
     <div class="counter blue">
-      <button onclick="change('blue', -5)">−5</button>
-      <button onclick="change('blue', -1)">−1</button>
+      <button onclick="undo('blue')">Undo</button>
       <div class="value" id="blue">0</div>
       <button onclick="change('blue', 1)">+1</button>
       <button onclick="change('blue', 5)">+5</button>
@@ -150,8 +147,7 @@
     </div>
 
     <div class="counter green">
-      <button onclick="change('green', -5)">−5</button>
-      <button onclick="change('green', -1)">−1</button>
+      <button onclick="undo('green')">Undo</button>
       <div class="value" id="green">0</div>
       <button onclick="change('green', 1)">+1</button>
       <button onclick="change('green', 5)">+5</button>
@@ -170,18 +166,18 @@
         <ul>
           <li>15 exactly: <strong>2 pts</strong></li>
           <li>31 exactly: <strong>2 pts</strong></li>
-          <li>Go (no one can play without going over 31): <strong>1 pt</strong></li>
-          <li>Pair: <strong>2 pts</strong> (can go up two four of a kind)</li>
+          <li>Go: <strong>1 pt</strong></li>
+          <li>Pair: <strong>2 pts</strong></li>
           <li>Run of 3+: <strong>1 pt per card</strong></li>
         </ul>
       </li>
       <li><strong>In hand / crib:</strong>
         <ul>
-          <li>15s: <strong>2 pts</strong> each</li>
-          <li>Pairs: <strong>2 pts</strong> each</li>
-          <li>Runs of 3 or more: <strong>1 pt per card</strong></li>
-          <li>Flush (4+ cards, entire hand): <strong>1 pt per card</strong></li>
-          <li>Nobs (Jack same suit as starter): <strong>1 pt</strong></li>
+          <li>15s: <strong>2 pts</strong></li>
+          <li>Pairs: <strong>2 pts</strong></li>
+          <li>Runs of 3+: <strong>1 pt per card</strong></li>
+          <li>Flush: <strong>1 pt per card</strong></li>
+          <li>Nobs: <strong>1 pt</strong></li>
         </ul>
       </li>
     </ul>
@@ -190,11 +186,11 @@
   <div class="block cribbage-rules">
     <h2>Rules</h2>
     <ul>
-      <li>Each player is dealt <strong>6 cards</strong> (5 cards in 3-player games)</li>
-      <li><strong>Discard 2 cards</strong> to the crib (1 each in 3-player games)</li>
-      <li>Cut deck to reveal starter card</li>
-      <li>Players alternate <strong>playing cards</strong> to 31</li>
-      <li>Players play hands (& crib if dealer)</li>
+      <li>Deal <strong>6 cards</strong> (5 cards in 3-player games)</li>
+      <li><strong>Discard 2 cards</strong> to the crib (1 in 3-player)</li>
+      <li>Reveal starter card</li>
+      <li>Play to 31</li>
+      <li>Play hands (& crib if dealer)</li>
       <li>First to <strong>121 points</strong> wins</li>
     </ul>
   </div>
@@ -202,8 +198,9 @@
   <button class="restart" onclick="restartAll()">Reset</button>
 
   <script>
-    const tempValues = { red: 0, blue: 0, green: 0 };
-    const timers = { red: null, blue: null, green: null };
+    const pendingDeltas = { red: 0, blue: 0, green: 0 };
+    const applyTimers = { red: null, blue: null, green: null };
+    const undoStack = { red: [], blue: [], green: [] };
 
     function loadState() {
       ['red', 'blue', 'green'].forEach(id => {
@@ -217,35 +214,71 @@
     }
 
     function change(id, delta) {
-      const el = document.getElementById(id);
-      let val = parseInt(el.textContent, 10);
-      val = Math.max(0, val + delta);
-      el.textContent = val;
-      saveState(id, val);
-      updateTempDisplay(id, delta);
-      renderBoard();
+      pendingDeltas[id] += delta;
+      updateTempDisplay(id);
+
+      if (applyTimers[id]) clearTimeout(applyTimers[id]);
+
+      applyTimers[id] = setTimeout(() => {
+        const valueEl = document.getElementById(id);
+        let currentVal = parseInt(valueEl.textContent);
+        const totalChange = pendingDeltas[id];
+
+        if (totalChange !== 0) {
+          undoStack[id].push(currentVal); // Save previous state
+          currentVal = Math.max(0, currentVal + totalChange);
+          valueEl.textContent = currentVal;
+          saveState(id, currentVal);
+        }
+
+        pendingDeltas[id] = 0;
+        document.getElementById(`${id}-temp`).style.opacity = "0";
+        renderBoard();
+      }, 5000);
     }
 
-    function updateTempDisplay(id, delta) {
+    function updateTempDisplay(id) {
       const tempEl = document.getElementById(`${id}-temp`);
-      tempValues[id] += delta;
-      const showValue = tempValues[id];
-      tempEl.textContent = (showValue > 0 ? "+" : "") + showValue;
-      tempEl.className = `temp-display ${showValue >= 0 ? 'temp-positive' : 'temp-negative'}`;
-      tempEl.style.opacity = "1";
-      if (timers[id]) clearTimeout(timers[id]);
-      timers[id] = setTimeout(() => {
+      const delta = pendingDeltas[id];
+      if (delta === 0) {
         tempEl.style.opacity = "0";
-        tempValues[id] = 0;
-      }, 10000);
+        return;
+      }
+      tempEl.textContent = (delta > 0 ? "+" : "") + delta;
+      tempEl.className = `temp-display ${delta >= 0 ? 'temp-positive' : 'temp-negative'}`;
+      tempEl.style.opacity = "1";
     }
+
+    function undo(id) {
+      // If there is a pending delta (change not yet applied)
+      if (pendingDeltas[id] !== 0) {
+        pendingDeltas[id] = 0;
+        document.getElementById(`${id}-temp`).style.opacity = "0";
+        if (applyTimers[id]) {
+          clearTimeout(applyTimers[id]);
+          applyTimers[id] = null;
+        }
+        return; // Don't alter history or score
+      }
+
+      // If no pending delta, pop from undo stack and update score
+      if (undoStack[id].length > 0) {
+        const previousVal = undoStack[id].pop();
+        document.getElementById(id).textContent = previousVal;
+        saveState(id, previousVal);
+        renderBoard();
+      }
+    }
+
 
     function restartAll() {
       ['red', 'blue', 'green'].forEach(id => {
         document.getElementById(id).textContent = "0";
         localStorage.setItem(id, "0");
+        pendingDeltas[id] = 0;
+        undoStack[id] = [];
         document.getElementById(`${id}-temp`).style.opacity = "0";
-        tempValues[id] = 0;
+        if (applyTimers[id]) clearTimeout(applyTimers[id]);
       });
       renderBoard();
     }
