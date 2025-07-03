@@ -41,6 +41,7 @@
       border: none;
       border-radius: 0.4rem;
       background-color: #ddd;
+      cursor: pointer;
     }
 
     .value {
@@ -59,7 +60,7 @@
       position: absolute;
       top: -1.2rem;
       font-size: 0.9rem;
-      opacity: 0.8;
+      opacity: 0;
       transition: opacity 0.5s ease-out;
       pointer-events: none;
     }
@@ -131,7 +132,7 @@
 
   <div class="block">
     <div class="counter red">
-      <button onclick="undo('red')">Undo</button>
+      <button onclick="undo('red')">↺</button>
       <div class="value" id="red">0</div>
       <button onclick="change('red', 1)">+1</button>
       <button onclick="change('red', 5)">+5</button>
@@ -139,7 +140,7 @@
     </div>
 
     <div class="counter blue">
-      <button onclick="undo('blue')">Undo</button>
+      <button onclick="undo('blue')">↺</button>
       <div class="value" id="blue">0</div>
       <button onclick="change('blue', 1)">+1</button>
       <button onclick="change('blue', 5)">+5</button>
@@ -147,7 +148,7 @@
     </div>
 
     <div class="counter green">
-      <button onclick="undo('green')">Undo</button>
+      <button onclick="undo('green')">↺</button>
       <div class="value" id="green">0</div>
       <button onclick="change('green', 1)">+1</button>
       <button onclick="change('green', 5)">+5</button>
@@ -198,14 +199,16 @@
   <button class="restart" onclick="restartAll()">Reset</button>
 
   <script>
-    const pendingDeltas = { red: 0, blue: 0, green: 0 };
-    const applyTimers = { red: null, blue: null, green: null };
-    const undoStack = { red: [], blue: [], green: [] };
+    const tempTimers = { red: null, blue: null, green: null };
+    const tempValues = { red: 0, blue: 0, green: 0 };
+    const chunkHistory = { red: [], blue: [], green: [] };
+    const chunkStartValues = { red: 0, blue: 0, green: 0 };
 
     function loadState() {
       ['red', 'blue', 'green'].forEach(id => {
         const val = parseInt(localStorage.getItem(id)) || 0;
         document.getElementById(id).textContent = val;
+        chunkStartValues[id] = val;
       });
     }
 
@@ -213,33 +216,43 @@
       localStorage.setItem(id, value);
     }
 
+    function startNewChunk(id) {
+      const currentVal = parseInt(document.getElementById(id).textContent);
+      chunkHistory[id].push(chunkStartValues[id]);
+      chunkStartValues[id] = currentVal;
+    }
+
     function change(id, delta) {
-      pendingDeltas[id] += delta;
+      const valueEl = document.getElementById(id);
+      let currentVal = parseInt(valueEl.textContent);
+      
+      // If starting a new chunk (no active timer), save the current value as chunk start
+      if (!tempTimers[id]) {
+        chunkStartValues[id] = currentVal;
+      }
+      
+      currentVal = Math.max(0, currentVal + delta);
+      valueEl.textContent = currentVal;
+      saveState(id, currentVal);
+
+      tempValues[id] += delta;
       updateTempDisplay(id);
 
-      if (applyTimers[id]) clearTimeout(applyTimers[id]);
-
-      applyTimers[id] = setTimeout(() => {
-        const valueEl = document.getElementById(id);
-        let currentVal = parseInt(valueEl.textContent);
-        const totalChange = pendingDeltas[id];
-
-        if (totalChange !== 0) {
-          undoStack[id].push(currentVal); // Save previous state
-          currentVal = Math.max(0, currentVal + totalChange);
-          valueEl.textContent = currentVal;
-          saveState(id, currentVal);
-        }
-
-        pendingDeltas[id] = 0;
-        document.getElementById(`${id}-temp`).style.opacity = "0";
-        renderBoard();
+      if (tempTimers[id]) clearTimeout(tempTimers[id]);
+      tempTimers[id] = setTimeout(() => {
+        // When the timer expires, finalize this chunk
+        startNewChunk(id);
+        tempValues[id] = 0;
+        updateTempDisplay(id);
+        tempTimers[id] = null;
       }, 5000);
+
+      renderBoard();
     }
 
     function updateTempDisplay(id) {
       const tempEl = document.getElementById(`${id}-temp`);
-      const delta = pendingDeltas[id];
+      const delta = tempValues[id];
       if (delta === 0) {
         tempEl.style.opacity = "0";
         return;
@@ -250,35 +263,36 @@
     }
 
     function undo(id) {
-      // If there is a pending delta (change not yet applied)
-      if (pendingDeltas[id] !== 0) {
-        pendingDeltas[id] = 0;
-        document.getElementById(`${id}-temp`).style.opacity = "0";
-        if (applyTimers[id]) {
-          clearTimeout(applyTimers[id]);
-          applyTimers[id] = null;
-        }
-        return; // Don't alter history or score
-      }
-
-      // If no pending delta, pop from undo stack and update score
-      if (undoStack[id].length > 0) {
-        const previousVal = undoStack[id].pop();
+      if (tempTimers[id]) {
+        // If there's an active timer, go back to the chunk start value
+        clearTimeout(tempTimers[id]);
+        tempTimers[id] = null;
+        document.getElementById(id).textContent = chunkStartValues[id];
+        saveState(id, chunkStartValues[id]);
+        tempValues[id] = 0;
+        updateTempDisplay(id);
+      } else if (chunkHistory[id].length > 0) {
+        // If no active timer, go back to the previous chunk
+        const previousVal = chunkHistory[id].pop();
         document.getElementById(id).textContent = previousVal;
         saveState(id, previousVal);
-        renderBoard();
+        chunkStartValues[id] = previousVal;
       }
+      renderBoard();
     }
-
 
     function restartAll() {
       ['red', 'blue', 'green'].forEach(id => {
         document.getElementById(id).textContent = "0";
         localStorage.setItem(id, "0");
-        pendingDeltas[id] = 0;
-        undoStack[id] = [];
-        document.getElementById(`${id}-temp`).style.opacity = "0";
-        if (applyTimers[id]) clearTimeout(applyTimers[id]);
+        chunkHistory[id] = [];
+        chunkStartValues[id] = 0;
+        tempValues[id] = 0;
+        updateTempDisplay(id);
+        if (tempTimers[id]) {
+          clearTimeout(tempTimers[id]);
+          tempTimers[id] = null;
+        }
       });
       renderBoard();
     }
