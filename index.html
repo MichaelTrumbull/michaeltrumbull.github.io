@@ -35,19 +35,20 @@
     }
 
     .counter button {
-      font-size: 1rem;
-      padding: 0.5rem 0.75rem;
+      font-size: 1.2rem;
+      padding: 0.75rem 1rem;
       margin: 0 0.2rem;
       border: none;
       border-radius: 0.4rem;
       background-color: #ddd;
       cursor: pointer;
+      min-width: 3rem;
     }
 
     .value {
-      font-size: 2rem;
+      font-size: 2.5rem;
       font-weight: bold;
-      min-width: 3rem;
+      min-width: 4rem;
       text-align: center;
       margin: 0 0.5rem;
     }
@@ -123,6 +124,11 @@
       border-radius: 50%;
       margin: auto;
     }
+
+    .disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
@@ -131,10 +137,12 @@
   </div>
 
   <div class="block">
+    <div id="winner-display" class="winner" style="display: none;"></div>
     <div class="counter red">
       <button onclick="undo('red')">↺</button>
       <div class="value" id="red">0</div>
       <button onclick="change('red', 1)">+1</button>
+      <button onclick="change('red', 2)">+2</button>
       <button onclick="change('red', 5)">+5</button>
       <div class="temp-display" id="red-temp"></div>
     </div>
@@ -143,6 +151,7 @@
       <button onclick="undo('blue')">↺</button>
       <div class="value" id="blue">0</div>
       <button onclick="change('blue', 1)">+1</button>
+      <button onclick="change('blue', 2)">+2</button>
       <button onclick="change('blue', 5)">+5</button>
       <div class="temp-display" id="blue-temp"></div>
     </div>
@@ -151,6 +160,7 @@
       <button onclick="undo('green')">↺</button>
       <div class="value" id="green">0</div>
       <button onclick="change('green', 1)">+1</button>
+      <button onclick="change('green', 2)">+2</button>
       <button onclick="change('green', 5)">+5</button>
       <div class="temp-display" id="green-temp"></div>
     </div>
@@ -196,7 +206,9 @@
     </ul>
   </div>
 
-  <button class="restart" onclick="restartAll()">Reset</button>
+  <div class="block">
+    <button class="restart" onclick="restartAll()">Reset</button>
+  </div>
 
   <script>
     const tempTimers = { red: null, blue: null, green: null };
@@ -222,7 +234,33 @@
       chunkStartValues[id] = currentVal;
     }
 
+    function checkWinner() {
+      const scores = {
+        red: parseInt(document.getElementById('red').textContent),
+        blue: parseInt(document.getElementById('blue').textContent),
+        green: parseInt(document.getElementById('green').textContent)
+      };
+      
+      for (const [color, score] of Object.entries(scores)) {
+        if (score >= 121) {
+          document.getElementById('winner-display').textContent = `${color.toUpperCase()} WINS!`;
+          document.getElementById('winner-display').style.display = 'block';
+          
+          // Disable all buttons
+          document.querySelectorAll('.counter button').forEach(btn => {
+            btn.disabled = true;
+            btn.classList.add('disabled');
+          });
+          return true;
+        }
+      }
+      return false;
+    }
+
     function change(id, delta) {
+      // Check if game is already won
+      if (document.querySelector('.counter button:disabled')) return;
+      
       const valueEl = document.getElementById(id);
       let currentVal = parseInt(valueEl.textContent);
       
@@ -231,23 +269,25 @@
         chunkStartValues[id] = currentVal;
       }
       
-      currentVal = Math.max(0, currentVal + delta);
-      valueEl.textContent = currentVal;
-      saveState(id, currentVal);
-
+      // Only update temp value, not the core value yet
       tempValues[id] += delta;
       updateTempDisplay(id);
 
       if (tempTimers[id]) clearTimeout(tempTimers[id]);
       tempTimers[id] = setTimeout(() => {
-        // When the timer expires, finalize this chunk
+        // When the timer expires, apply the temp value to the core value
+        const newVal = Math.min(121, Math.max(0, chunkStartValues[id] + tempValues[id]));
+        valueEl.textContent = newVal;
+        saveState(id, newVal);
+        
+        // Finalize this chunk
         startNewChunk(id);
         tempValues[id] = 0;
         updateTempDisplay(id);
         tempTimers[id] = null;
-      }, 5000);
-
-      renderBoard();
+        renderBoard();
+        checkWinner();
+      }, 2000); // Changed to 2 seconds
     }
 
     function updateTempDisplay(id) {
@@ -263,12 +303,13 @@
     }
 
     function undo(id) {
+      // Check if game is already won
+      if (document.querySelector('.counter button:disabled')) return;
+      
       if (tempTimers[id]) {
-        // If there's an active timer, go back to the chunk start value
+        // If there's an active timer, cancel it and clear temp value
         clearTimeout(tempTimers[id]);
         tempTimers[id] = null;
-        document.getElementById(id).textContent = chunkStartValues[id];
-        saveState(id, chunkStartValues[id]);
         tempValues[id] = 0;
         updateTempDisplay(id);
       } else if (chunkHistory[id].length > 0) {
@@ -277,8 +318,8 @@
         document.getElementById(id).textContent = previousVal;
         saveState(id, previousVal);
         chunkStartValues[id] = previousVal;
+        renderBoard();
       }
-      renderBoard();
     }
 
     function restartAll() {
@@ -294,6 +335,14 @@
           tempTimers[id] = null;
         }
       });
+      
+      // Hide winner display and re-enable buttons
+      document.getElementById('winner-display').style.display = 'none';
+      document.querySelectorAll('.counter button').forEach(btn => {
+        btn.disabled = false;
+        btn.classList.remove('disabled');
+      });
+      
       renderBoard();
     }
 
@@ -344,6 +393,7 @@
 
     loadState();
     renderBoard();
+    checkWinner(); // Check for winner on load in case game was saved in won state
   </script>
 </body>
 </html>
